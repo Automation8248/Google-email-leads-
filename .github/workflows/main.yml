@@ -1,13 +1,13 @@
-name: Daily Lead Scraper
+name: Google API Scraper Bot
 
-# Din mein 2 baar chalne ka logic (Har 12 ghante mein)
 on:
   schedule:
-    - cron: '0 0,12 * * *'  # Runs at 00:00 and 12:00 UTC everyday
-  workflow_dispatch:        # Isse aap GitHub se manually click karke bhi run kar sakte hain
+    # Yeh script ko din mein do baar run karega (Midnight aur Noon UTC)
+    - cron: '0 0,12 * * *'
+  workflow_dispatch: # Isse aap GitHub par button click karke bhi manually chala sakte hain
 
 jobs:
-  scrape-data:
+  run-scraper:
     runs-on: ubuntu-latest
 
     steps:
@@ -22,14 +22,13 @@ jobs:
       - name: Install Dependencies
         run: pip install -r requirements.txt
 
-      - name: Run Scraper Script
+      - name: Run Python Scraper
         run: python scraper.py
 
-      - name: Commit and Push Changes
+      - name: Commit and Push Results
         run: |
-          git config --global user.name "GitHub Actions Bot"
-          git config --global user.email "actions@github.com"
-          git add emails/ progress.json
-          # Agar naya data mila hai tabhi commit karega, warna skip karega
-          git commit -m "Auto-update: Scraped new emails [skip ci]" || echo "No changes to commit"
+          git config --global user.name "Scraper-Bot"
+          git config --global user.email "bot@github.com"
+          git add leads_output/ progress.json
+          git commit -m "Auto-update: Scraped new leads (JSON & CSV)" || echo "No new leads found to commit"
           git push
