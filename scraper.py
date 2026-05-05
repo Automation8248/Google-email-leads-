@@ -50,19 +50,30 @@ LOCATIONS = [
 DOMAINS = ["@gmail.com", "@yahoo.com", "@outlook.com"]
 
 # ==========================================
-# 2. DIRECTORY & PROGRESS SETUP
+# 2. FORCEFUL DIRECTORY & PROGRESS SETUP
 # ==========================================
 OUTPUT_DIR = "leads_output"
 PROGRESS_FILE = "progress.json"
 
+# FORCE LOGIC: Run hote hi check karega aur folder banayega
+if not os.path.exists(OUTPUT_DIR):
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+
 def load_progress():
-    if os.path.exists(PROGRESS_FILE):
-        try:
-            with open(PROGRESS_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except json.JSONDecodeError:
-            return {}
-    return {}
+    # FORCE LOGIC: Agar progress file nahi hai, toh forcefully ek khali {} file banayega
+    if not os.path.exists(PROGRESS_FILE):
+        with open(PROGRESS_FILE, "w", encoding="utf-8") as f:
+            json.dump({}, f)
+        return {}
+        
+    try:
+        with open(PROGRESS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except json.JSONDecodeError:
+        # FORCE LOGIC: Agar file corrupt hai, toh use fix karega
+        with open(PROGRESS_FILE, "w", encoding="utf-8") as f:
+            json.dump({}, f)
+        return {}
 
 def save_progress(progress_data):
     with open(PROGRESS_FILE, "w", encoding="utf-8") as f:
@@ -122,7 +133,7 @@ def scrape_bing_emails(topic, location, total_pages=15):
                             })
                 
                 print(f"  -> Page {page + 1} Done! Found {emails_found_on_page} emails.")
-                time.sleep(random.uniform(2, 4)) # Anti-block delay
+                time.sleep(random.uniform(2, 4)) 
                 
             except Exception as e:
                 print(f"⚠️ Error on Page {page + 1}: {e}")
@@ -131,16 +142,16 @@ def scrape_bing_emails(topic, location, total_pages=15):
     return all_extracted_data
 
 # ==========================================
-# 4. DATA SAVING LOGIC (FORCEFUL FILE CREATION)
+# 4. FORCEFUL DATA SAVING LOGIC (JSON & CSV)
 # ==========================================
 def save_data(data, topic):
     if not data:
         print("No new data to save.")
         return
         
+    # Dobara double check karega ki folder delete toh nahi hua script chalne ke beech
     if not os.path.exists(OUTPUT_DIR):
-        os.makedirs(OUTPUT_DIR)
-        print(f"📁 Forcefully created directory: {OUTPUT_DIR}/")
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
         
     filename_base = os.path.join(OUTPUT_DIR, topic.lower().replace(' ', '_').replace('/', '_'))
     json_file = f"{filename_base}.json"
@@ -149,23 +160,30 @@ def save_data(data, topic):
     existing_emails = set()
     existing_data = []
     
-    if os.path.exists(json_file):
-        try:
-            with open(json_file, "r", encoding="utf-8") as f:
-                existing_data = json.load(f)
-                existing_emails = {row['Email'] for row in existing_data}
-        except json.JSONDecodeError:
-            print(f"⚠️ Warning: {json_file} is corrupted. Starting fresh.")
-            existing_data = []
+    # FORCE LOGIC: Agar JSON file pehle se nahi hai toh automatically banayega
+    if not os.path.exists(json_file):
+        with open(json_file, "w", encoding="utf-8") as f:
+            json.dump([], f)
             
+    try:
+        with open(json_file, "r", encoding="utf-8") as f:
+            existing_data = json.load(f)
+            existing_emails = {row['Email'] for row in existing_data}
+    except json.JSONDecodeError:
+        print(f"⚠️ Warning: {json_file} is corrupted. Fixing forcefully.")
+        existing_data = []
+            
+    # Sirf naye aur unique emails add honge
     for row in data:
         if row['Email'] not in existing_emails:
             existing_data.append(row)
             existing_emails.add(row['Email'])
             
+    # Naye data ko file mein FORCEFULLY likhna (Purani file overwrite hoke update hogi)
     with open(json_file, "w", encoding="utf-8") as f:
         json.dump(existing_data, f, indent=4)
         
+    # CSV Backup bhi forcefully banayega
     if existing_data:
         keys = existing_data[0].keys()
         with open(csv_file, "w", newline='', encoding='utf-8') as f:
@@ -173,10 +191,10 @@ def save_data(data, topic):
             dict_writer.writeheader()
             dict_writer.writerows(existing_data)
             
-    print(f"✅ Forcefully saved {len(existing_data)} total leads into: {json_file}")
+    print(f"✅ Data forcefully updated! Total leads in {json_file}: {len(existing_data)}")
 
 # ==========================================
-# 5. RUN MANAGER
+# 5. AUTOMATION RUN MANAGER
 # ==========================================
 def run_automation(target_topic, locations_per_run=3):
     progress = load_progress()
@@ -203,12 +221,12 @@ def run_automation(target_topic, locations_per_run=3):
         
         progress[target_topic].append(loc)
         save_progress(progress)
-        print(f"✅ {loc} Done! Moving to next...\n")
+        print(f"✅ Location '{loc}' Done!\n")
 
     save_data(daily_data, target_topic)
-    print(f"\n🎉 Daily Run Complete! Saved total new leads in {OUTPUT_DIR}/ folder.")
+    print(f"\n🎉 Run Complete! All data saved securely in {OUTPUT_DIR}/ folder.")
 
 if __name__ == "__main__":
-    # Yahan aap apna topic change kar sakte hain
+    # Abhi "Dentists" target ho raha hai. Aap chahein toh loop laga sakte hain ya yahan naam change kar sakte hain.
     CURRENT_TOPIC = "Dentists" 
     run_automation(target_topic=CURRENT_TOPIC, locations_per_run=3)
