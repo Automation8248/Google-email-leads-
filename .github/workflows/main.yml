@@ -1,10 +1,10 @@
-name: Bing Scraper Bot
+name: Bing Lead Scraper Bot
 
 on:
   schedule:
-    # Yeh script ko din mein do baar run karega (Midnight aur Noon UTC)
+    # Yeh script ko din mein do baar run karega (12:00 AM aur 12:00 PM UTC par)
     - cron: '0 0,12 * * *'
-  workflow_dispatch: # Isse aap GitHub par button click karke bhi manually chala sakte hain
+  workflow_dispatch: # Isse aap GitHub se manually play button daba kar chala sakte hain
 
 jobs:
   run-scraper:
@@ -25,10 +25,11 @@ jobs:
       - name: Run Python Scraper
         run: python scraper.py
 
-      - name: Commit and Push Results
+      - name: Commit and Push Results Forcefully
         run: |
           git config --global user.name "Scraper-Bot"
           git config --global user.email "bot@github.com"
-          git add leads_output/ progress.json
-          git commit -m "Auto-update: Forcefully created/updated leads JSON & CSV" || echo "No new leads found to commit"
+          # -A command FORCEFULLY nayi, purani aur delete hui files ko add kar deti hai
+          git add -A
+          git commit -m "Auto-update: Extracted new Bing leads (JSON & CSV)" || echo "No new leads found to commit"
           git push
