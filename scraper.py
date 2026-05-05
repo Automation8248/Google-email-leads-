@@ -1,29 +1,19 @@
 import requests
 import re
 import json
-import time
-import random
+import csv
 import os
+import time
 from datetime import datetime
 
 # ==========================================
-# 1. USER AGENTS LIST (Anti-Block)
+# 1. API KEYS (Google Custom Search)
 # ==========================================
-USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:121.0) Gecko/20100101 Firefox/121.0",
-    "Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1",
-    "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
-]
+API_KEY = "YOUR_GOOGLE_API_KEY"
+CX_ID = "YOUR_SEARCH_ENGINE_ID"
 
 # ==========================================
-# 2. LISTS (100 Topics & 54 Locations)
+# 2. FULL LISTS (100 Topics & 54 Locations)
 # ==========================================
 TOPICS = [
     "Dentists", "Orthodontists", "Chiropractors", "Veterinary Clinics", "Pet Groomers", 
@@ -61,14 +51,16 @@ LOCATIONS = [
     "Wisconsin", "Wyoming", "England", "Northern Ireland", "Scotland", "Wales"
 ]
 
+DOMAINS = ["@gmail.com", "@yahoo.com", "@outlook.com"]
+
 # ==========================================
-# 3. FILE MANAGEMENT SETUP
+# 3. DIRECTORY & PROGRESS SETUP
 # ==========================================
-EMAIL_DIR = "emails"
+OUTPUT_DIR = "leads_output"
 PROGRESS_FILE = "progress.json"
 
-if not os.path.exists(EMAIL_DIR):
-    os.makedirs(EMAIL_DIR)
+if not os.path.exists(OUTPUT_DIR):
+    os.makedirs(OUTPUT_DIR)
 
 def load_progress():
     if os.path.exists(PROGRESS_FILE):
@@ -81,50 +73,94 @@ def save_progress(progress_data):
         json.dump(progress_data, f, indent=4)
 
 # ==========================================
-# 4. CORE SCRAPING LOGIC (SUPER FAST)
+# 4. GOOGLE API SCRAPING LOGIC
 # ==========================================
-def scrape_google_emails(topic, location, start_page=7, end_page=15):
-    query = f'"{topic}" "{location}" "contact us" "@gmail.com"'
-    extracted_emails = set()
+def extract_emails_via_cse(topic, location, pages=2):
+    all_extracted_data = []
     
-    # Session optimization connection fast karne ke liye
-    session = requests.Session()
-    adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
-    session.mount('https://', adapter)
+    for domain in DOMAINS:
+        query = f'"{topic}" "{location}" "contact us" "{domain}"'
+        print(f"🔍 CSE API Request for: {query}")
 
-    print(f"--> 🚀 FAST MODE: Scraping '{topic}' in '{location}' (Pages {start_page} to {end_page})...")
-
-    for start in range((start_page-1)*10, end_page*10, 10):
-        current_page = (start // 10) + 1
-        url = f"https://www.google.com/search?q={query}&start={start}"
-        
-        headers = {
-            "User-Agent": random.choice(USER_AGENTS),
-            "Accept-Language": "en-US,en;q=0.9"
-        }
-        
-        try:
-            # 5-second timeout, agar page load nahi hua toh script skip karke aage badhegi
-            response = session.get(url, headers=headers, timeout=5) 
+        for i in range(pages):
+            start = (i * 10) + 1
+            url = f"https://www.googleapis.com/customsearch/v1?q={query}&key={API_KEY}&cx={CX_ID}&start={start}"
             
-            emails = re.findall(r'[a-zA-Z0-9._%+-]+@gmail\.com', response.text)
-            for email in emails:
-                extracted_emails.add(email.lower())
+            try:
+                response = requests.get(url).json()
+                if "error" in response:
+                    print(f"⚠️ API Error: {response['error']['message']}")
+                    return all_extracted_data
+
+                items = response.get("items", [])
+                for item in items:
+                    snippet = item.get("snippet", "")
+                    link = item.get("link", "")
+                    title = item.get("title", "")
+
+                    emails = re.findall(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', snippet)
+                    
+                    for email in emails:
+                        clean_email = email.lower()
+                        # Verify domain match
+                        if any(d in clean_email for d in DOMAINS):
+                            all_extracted_data.append({
+                                "Email": clean_email,
+                                "Business Name": title,
+                                "Source": link,
+                                "Topic": topic,
+                                "Location": location
+                            })
+                # Small wait to respect API limits
+                time.sleep(1)
+            except Exception as e:
+                print(f"Error making API call: {e}")
+                break
                 
-            print(f"Page {current_page} scanned. Found {len(emails)} emails.")
-            
-            # Wait time sirf 1 second kar diya hai
-            time.sleep(1) 
-            
-        except Exception as e:
-            print(f"⚠️ Skipped Page {current_page} due to slow network.")
-            
-    return list(extracted_emails)
+    return all_extracted_data
 
 # ==========================================
-# 5. SINGLE RUN MANAGER
+# 5. DATA SAVING LOGIC (JSON + CSV)
 # ==========================================
-def run_scraper(target_topic):
+def save_data(data, topic):
+    if not data:
+        return
+        
+    filename_base = os.path.join(OUTPUT_DIR, topic.lower().replace(' ', '_').replace('/', '_'))
+    json_file = f"{filename_base}.json"
+    csv_file = f"{filename_base}.csv"
+    
+    # Existing data check to prevent duplicates
+    existing_emails = set()
+    existing_data = []
+    
+    if os.path.exists(json_file):
+        with open(json_file, "r") as f:
+            existing_data = json.load(f)
+            existing_emails = {row['Email'] for row in existing_data}
+            
+    # Add only new unique emails
+    for row in data:
+        if row['Email'] not in existing_emails:
+            existing_data.append(row)
+            existing_emails.add(row['Email'])
+            
+    # Save JSON
+    with open(json_file, "w") as f:
+        json.dump(existing_data, f, indent=4)
+        
+    # Save CSV
+    if existing_data:
+        keys = existing_data[0].keys()
+        with open(csv_file, "w", newline='', encoding='utf-8') as f:
+            dict_writer = csv.DictWriter(f, fieldnames=keys)
+            dict_writer.writeheader()
+            dict_writer.writerows(existing_data)
+
+# ==========================================
+# 6. RUN MANAGER (Picks 3 locations daily)
+# ==========================================
+def run_automation(target_topic, locations_per_run=3):
     progress = load_progress()
     
     if target_topic not in progress:
@@ -134,53 +170,29 @@ def run_scraper(target_topic):
     pending_locations = [loc for loc in LOCATIONS if loc not in completed_locations]
     
     if not pending_locations:
-        print(f"✅ Sabhi 54 locations '{target_topic}' ke liye poori ho chuki hain!")
-        return False
+        print(f"✅ Sabhi 54 locations '{target_topic}' ke liye scrape ho chuki hain!")
+        return
 
-    loc_to_scrape = pending_locations[0]
+    # Select the next batch of locations
+    locations_to_scrape = pending_locations[:locations_per_run]
     
-    print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 🚀 Run Started!")
-    print(f"Topic: {target_topic} | Target Location: {loc_to_scrape}\n")
+    print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 🚀 Automation Started!")
+    print(f"Topic: {target_topic} | Target Locations Today: {locations_to_scrape}\n")
 
-    topic_file_path = os.path.join(EMAIL_DIR, f"{target_topic.lower().replace(' ', '_').replace('/', '_')}.json")
-    
-    existing_emails = set()
-    if os.path.exists(topic_file_path):
-        with open(topic_file_path, "r") as f:
-            existing_emails = set(json.load(f))
-
-    # Page 7 se 15 tak fast scraping
-    new_emails = scrape_google_emails(topic=target_topic, location=loc_to_scrape, start_page=7, end_page=15)
-    existing_emails.update(new_emails)
-    
-    progress[target_topic].append(loc_to_scrape)
-    save_progress(progress)
-
-    with open(topic_file_path, "w") as f:
-        json.dump(list(existing_emails), f, indent=4)
-
-    print(f"\n✅ {loc_to_scrape} Done! New emails found: {len(new_emails)}")
-    print(f"📂 Total unique emails for '{target_topic}': {len(existing_emails)}")
-    print(f"Saved in -> {topic_file_path}\n")
-    return True
-
-# ==========================================
-# 6. 24-HOUR AUTOMATION LOOP
-# ==========================================
-if __name__ == "__main__":
-    # Yahan aap list mein se apna koi bhi topic target kar sakte hain
-    CURRENT_TOPIC = "Dentists" 
-    
-    print(f"🟢 Automation Started for '{CURRENT_TOPIC}'...")
-    print("Script will run 2 times in 24 hours (Every 12 Hours).")
-    
-    while True:
-        has_more_locations = run_scraper(target_topic=CURRENT_TOPIC)
+    daily_data = []
+    for loc in locations_to_scrape:
+        new_leads = extract_emails_via_cse(topic=target_topic, location=loc, pages=2)
+        daily_data.extend(new_leads)
         
-        if not has_more_locations:
-            print(f"No more locations left for '{CURRENT_TOPIC}'. Exiting automation.")
-            break
-            
-        print("\n⏳ Next run will be exactly after 12 hours. Do not close this terminal...")
-        # 12 Ghante (43200 seconds) wait karega next location ke liye
-        time.sleep(43200)
+        # Mark location as completed
+        progress[target_topic].append(loc)
+        save_progress(progress)
+        print(f"✅ {loc} Done! Found {len(new_leads)} emails.")
+
+    save_data(daily_data, target_topic)
+    print(f"\n🎉 Daily Run Complete! Saved total {len(daily_data)} new leads in {OUTPUT_DIR}/ folder.")
+
+if __name__ == "__main__":
+    # Yahan apna target topic badal sakte hain
+    CURRENT_TOPIC = "Dentists" 
+    run_automation(target_topic=CURRENT_TOPIC)
