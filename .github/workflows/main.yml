@@ -1,4 +1,4 @@
-name: Google API Scraper Bot
+name: Bing Scraper Bot
 
 on:
   schedule:
@@ -24,17 +24,11 @@ jobs:
 
       - name: Run Python Scraper
         run: python scraper.py
-        
-      - name: Run Python Scraper
-        env:
-          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-          CX_ID: ${{ secrets.CX_ID }}
-        run: python scraper.py
-        
+
       - name: Commit and Push Results
         run: |
           git config --global user.name "Scraper-Bot"
           git config --global user.email "bot@github.com"
           git add leads_output/ progress.json
-          git commit -m "Auto-update: Scraped new leads (JSON & CSV)" || echo "No new leads found to commit"
+          git commit -m "Auto-update: Forcefully created/updated leads JSON & CSV" || echo "No new leads found to commit"
           git push
