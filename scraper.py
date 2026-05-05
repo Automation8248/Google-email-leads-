@@ -16,12 +16,14 @@ USER_AGENTS = [
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0",
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:121.0) Gecko/20100101 Firefox/121.0",
+    "Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Mobile/15E148 Safari/604.1",
     "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
 ]
 
 # ==========================================
-# 2. LISTS (Topics & Locations)
+# 2. LISTS (100 Topics & 54 Locations)
 # ==========================================
 TOPICS = [
     "Dentists", "Orthodontists", "Chiropractors", "Veterinary Clinics", "Pet Groomers", 
@@ -79,40 +81,43 @@ def save_progress(progress_data):
         json.dump(progress_data, f, indent=4)
 
 # ==========================================
-# 4. CORE SCRAPING LOGIC (FAST & OPTIMIZED)
+# 4. CORE SCRAPING LOGIC (SUPER FAST)
 # ==========================================
-def scrape_google_emails(topic, location, start_page=7, end_page=15): # Pages kam kar diye
+def scrape_google_emails(topic, location, start_page=7, end_page=15):
     query = f'"{topic}" "{location}" "contact us" "@gmail.com"'
     extracted_emails = set()
     
-    # Session optimization
+    # Session optimization connection fast karne ke liye
     session = requests.Session()
     adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
     session.mount('https://', adapter)
 
-    print(f"--> 🚀 SUPER FAST Mode: '{topic}' in '{location}'")
+    print(f"--> 🚀 FAST MODE: Scraping '{topic}' in '{location}' (Pages {start_page} to {end_page})...")
 
     for start in range((start_page-1)*10, end_page*10, 10):
+        current_page = (start // 10) + 1
         url = f"https://www.google.com/search?q={query}&start={start}"
+        
+        headers = {
+            "User-Agent": random.choice(USER_AGENTS),
+            "Accept-Language": "en-US,en;q=0.9"
+        }
+        
         try:
-            # Timeout ko 5 second kar diya (agar 5s mein load nahi hua toh skip)
-            response = session.get(url, headers={"User-Agent": random.choice(USER_AGENTS)}, timeout=5)
+            # 5-second timeout, agar page load nahi hua toh script skip karke aage badhegi
+            response = session.get(url, headers=headers, timeout=5) 
             
             emails = re.findall(r'[a-zA-Z0-9._%+-]+@gmail\.com', response.text)
-            extracted_emails.update([e.lower() for e in emails])
+            for email in emails:
+                extracted_emails.add(email.lower())
+                
+            print(f"Page {current_page} scanned. Found {len(emails)} emails.")
             
-            print(f"Page {(start//10)+1} done.")
-            
-            # Wait time sirf 1 second
+            # Wait time sirf 1 second kar diya hai
             time.sleep(1) 
             
-        except:
-            continue # Error aane par bina rukaawat agle page par jaye
-            
-    return list(extracted_emails)
-            
         except Exception as e:
-            print(f"⚠️ Skipped Page {current_page} due to slow connection/error.")
+            print(f"⚠️ Skipped Page {current_page} due to slow network.")
             
     return list(extracted_emails)
 
@@ -144,8 +149,8 @@ def run_scraper(target_topic):
         with open(topic_file_path, "r") as f:
             existing_emails = set(json.load(f))
 
-    # Yahan humne explicitly start_page=7 aur end_page=20 define kar diya hai
-    new_emails = scrape_google_emails(topic=target_topic, location=loc_to_scrape, start_page=7, end_page=20)
+    # Page 7 se 15 tak fast scraping
+    new_emails = scrape_google_emails(topic=target_topic, location=loc_to_scrape, start_page=7, end_page=15)
     existing_emails.update(new_emails)
     
     progress[target_topic].append(loc_to_scrape)
@@ -155,15 +160,15 @@ def run_scraper(target_topic):
         json.dump(list(existing_emails), f, indent=4)
 
     print(f"\n✅ {loc_to_scrape} Done! New emails found: {len(new_emails)}")
-    print(f"📂 Total unique emails for {target_topic}: {len(existing_emails)}")
+    print(f"📂 Total unique emails for '{target_topic}': {len(existing_emails)}")
     print(f"Saved in -> {topic_file_path}\n")
     return True
 
 # ==========================================
-# 6. 24-HOUR AUTOMATION LOOP (For PC/Server)
+# 6. 24-HOUR AUTOMATION LOOP
 # ==========================================
 if __name__ == "__main__":
-    # Yahan aap apna target topic daal sakte hain
+    # Yahan aap list mein se apna koi bhi topic target kar sakte hain
     CURRENT_TOPIC = "Dentists" 
     
     print(f"🟢 Automation Started for '{CURRENT_TOPIC}'...")
@@ -173,8 +178,9 @@ if __name__ == "__main__":
         has_more_locations = run_scraper(target_topic=CURRENT_TOPIC)
         
         if not has_more_locations:
-            print(f"No more locations left for {CURRENT_TOPIC}. Exiting automation.")
+            print(f"No more locations left for '{CURRENT_TOPIC}'. Exiting automation.")
             break
             
-        print("\n⏳ Next run will be exactly after 12 hours. Do not close this window...")
-        time.sleep(43200) # 12 ghante ka wait
+        print("\n⏳ Next run will be exactly after 12 hours. Do not close this terminal...")
+        # 12 Ghante (43200 seconds) wait karega next location ke liye
+        time.sleep(43200)
