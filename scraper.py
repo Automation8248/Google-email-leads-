@@ -81,38 +81,35 @@ def save_progress(progress_data):
 # ==========================================
 # 4. CORE SCRAPING LOGIC (FAST & OPTIMIZED)
 # ==========================================
-def scrape_google_emails(topic, location, start_page=7, end_page=20):
+def scrape_google_emails(topic, location, start_page=7, end_page=15): # Pages kam kar diye
     query = f'"{topic}" "{location}" "contact us" "@gmail.com"'
     extracted_emails = set()
-    start_index = (start_page - 1) * 10
-    end_index = end_page * 10 
-
-    print(f"--> ⚡ FAST Scraping '{topic}' in '{location}' (Pages {start_page} to {end_page})...")
-
-    # Session use karne se script bahut fast chalti hai
+    
+    # Session optimization
     session = requests.Session()
+    adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20)
+    session.mount('https://', adapter)
 
-    for start in range(start_index, end_index, 10):
-        current_page = (start // 10) + 1
+    print(f"--> 🚀 SUPER FAST Mode: '{topic}' in '{location}'")
+
+    for start in range((start_page-1)*10, end_page*10, 10):
         url = f"https://www.google.com/search?q={query}&start={start}"
-        
-        headers = {
-            "User-Agent": random.choice(USER_AGENTS),
-            "Accept-Language": "en-US,en;q=0.9"
-        }
-        
         try:
-            # Timeout (10s) lagaya taaki script kisi page par hang na ho
-            response = session.get(url, headers=headers, timeout=10) 
+            # Timeout ko 5 second kar diya (agar 5s mein load nahi hua toh skip)
+            response = session.get(url, headers={"User-Agent": random.choice(USER_AGENTS)}, timeout=5)
             
             emails = re.findall(r'[a-zA-Z0-9._%+-]+@gmail\.com', response.text)
-            for email in emails:
-                extracted_emails.add(email.lower())
-                
-            print(f"Page {current_page} scanned. Found {len(emails)} emails.")
+            extracted_emails.update([e.lower() for e in emails])
             
-            # Delay time kam kar diya hai (1.5 se 3 second)
-            time.sleep(random.uniform(1.5, 3)) 
+            print(f"Page {(start//10)+1} done.")
+            
+            # Wait time sirf 1 second
+            time.sleep(1) 
+            
+        except:
+            continue # Error aane par bina rukaawat agle page par jaye
+            
+    return list(extracted_emails)
             
         except Exception as e:
             print(f"⚠️ Skipped Page {current_page} due to slow connection/error.")
